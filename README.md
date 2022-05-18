@@ -1,4 +1,4 @@
-# Large Tether Transfer Agent
+# Uniswap V3 Swap Agent
 
 ## Description
 
@@ -16,7 +16,7 @@ Describe each of the type of alerts fired by this agent
   - Fired when a Uniswap V3 swap occurs
   - Severity is always set to "low"
   - Type is always set to "info"
-  - Metadata: sender, recipient, pool, token0, token1, fee
+  - Metadata: sender, recipient, pool
 
 ## Test Data
 
