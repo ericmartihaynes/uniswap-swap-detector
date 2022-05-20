@@ -22,4 +22,4 @@ Describe each of the type of alerts fired by this agent
 
 The bot behaviour can be verified with the following transaction:
 
-- 0x72414c7d10d5b31140c6793906c965ddcf2e537caebd85b559a49db10bbd4b0c
+- 0x72414c7d10d5b31140c6793906c965ddcf2e537caebd85b559a49db10bbd4b0c (make sure to change endpoint to one that has access to archive nodes).
