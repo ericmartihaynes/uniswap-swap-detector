@@ -15,10 +15,10 @@ export const SWAP_EVENT = "event Swap(address indexed sender, address indexed re
 export const UNISWAP_V3_FACTORY_ADDRESS = "0x1f98431c8ad98523631ae4a59f267346ea31f984";
 
 //cache to store the information of a pool (token0, token1, fee) and reduce the number of network calls
-//const cache = new Map<string, [string, string, string]>([]);
-const cache = new Map<string, string>([]);
+const cache = new Map<string, [string, string, string, string]>([]);
+//const cache = new Map<string, string>([]);
 
-export const provideHandleTx = (factory: string) => async (
+export const provideHandleTx = (factory: string, theProvider: ethers.providers.Provider) => async (
   txEvent: TransactionEvent
 ) => {
   const findings: Finding[] = [];
@@ -28,60 +28,55 @@ export const provideHandleTx = (factory: string) => async (
     SWAP_EVENT
   );
 
-  const provider = getEthersProvider();
-  
-
-  //let token0: string = "0x0000000000000000000000000000000000000000";
-  //let token1: string = "0x0000000000000000000000000000000000000000";
-  //let fee: string = "0";
-  let factory: string = "0x0000000000000000000000000000000000000000";
-  
+  const provider = theProvider;
   
   for(let i = 0; i < swapEvents.length; i++) {
+    let token0: string = "0x0000000000000000000000000000000000000000";
+    let token1: string = "0x0000000000000000000000000000000000000000";
+    let fee: string = "0";
+
     // extract swap event arguments
     const { sender, recipient, amount0, amount1, sqrtPriceX96, liquidity, tick } = swapEvents[i].args;
 
-    const possiblePoolAddress = swapEvents[i].address.toLocaleLowerCase();
+    const possiblePoolAddress = swapEvents[i].address.toLowerCase();
     
     const poolContract = new ethers.Contract(possiblePoolAddress, [
-      //'function token0() public view returns (address)',
-      //'function token1() public view returns (address)',
-      //'function fee() public view returns (uint24)',
-      'function factory() public view returns (address)'
+      'function token0() public view returns (address)',
+      'function token1() public view returns (address)',
+      'function fee() public view returns (uint24)'
     ], provider);
 
-    if(!cache.has(possiblePoolAddress)){
-      try {
-        factory = await poolContract.factory()
-        if(factory.toLowerCase() == UNISWAP_V3_FACTORY_ADDRESS) {  
-          cache.set(possiblePoolAddress, factory);
-        }
-      }   catch (e) { }
-    }
-    
-  
-    /*if(!cache.has(possiblePoolAddress)) { 
+    if(!cache.has(possiblePoolAddress)) { 
       try {
         token0 = await poolContract.token0();
         token1 = await poolContract.token1();
         fee = await poolContract.fee();
-        cache.set(possiblePoolAddress, [token0, token1, fee]);
-      }   catch (e) { }
+        cache.set(possiblePoolAddress, [token0, token1, fee, "0x1111111111111111111111111111111111111111"]);
+      }   catch (e) {cache.set(possiblePoolAddress, [token0, token1, fee, "0xe000000000000000000000000000000000000000"]); }
     }
-    else {
+    else if(cache.get(possiblePoolAddress)![3] == possiblePoolAddress) {
       token0 = cache.get(possiblePoolAddress)![0];
       token1 = cache.get(possiblePoolAddress)![1];
       fee = cache.get(possiblePoolAddress)![2];
     }
-
-    const factoryContract = new ethers.Contract(factory, [
-      'function getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)'
-    ], provider);
-    const pool = await factoryContract.getPool(token0, token1, fee);*/
-
+   
+    if(cache.get(possiblePoolAddress)![3] == "0x1111111111111111111111111111111111111111") {
+      const factoryContract = new ethers.Contract(factory, [
+        'function getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)'
+      ], provider);
+      const pool = await factoryContract.getPool(token0, token1, fee);
+      
+      if(possiblePoolAddress == pool.toLowerCase()){
+        cache.set(possiblePoolAddress, [token0, token1, fee, possiblePoolAddress]);
+      }
+      else {
+        cache.set(possiblePoolAddress, [token0, token1, fee, "0xe000000000000000000000000000000000000000"]);
+      }
+    }
+    
 
     // if a Uniswap V3 swap is detected, report it
-    if (cache.has(possiblePoolAddress)) {
+    if (cache.get(possiblePoolAddress)![3] == possiblePoolAddress) {
       findings.push(
         Finding.fromObject({
           name: "Uniswap V3 Swap",
@@ -94,9 +89,9 @@ export const provideHandleTx = (factory: string) => async (
             sender: sender.toLowerCase(),
             recipient: recipient.toLowerCase(),
             pool: possiblePoolAddress.toLowerCase(),
-            //token0: token0.toLowerCase(),
-            //token1: token1.toLowerCase(),
-            //fee: fee.toString(),
+            token0: token0.toLowerCase(),
+            token1: token1.toLowerCase(),
+            fee: fee.toString(),
           },
         })
       );
@@ -115,6 +110,6 @@ export const provideHandleTx = (factory: string) => async (
 // }
 
 export default {
-  handleTransaction: provideHandleTx(UNISWAP_V3_FACTORY_ADDRESS),
+  handleTransaction: provideHandleTx(UNISWAP_V3_FACTORY_ADDRESS, getEthersProvider()),
   // handleBlock
 };
