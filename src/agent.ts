@@ -7,12 +7,16 @@ import {
   FindingSeverity,
   FindingType,
   ethers,
-  getEthersProvider
+  getEthersProvider,
+  keccak256
 } from "forta-agent";
 import { createAddress } from "forta-agent-tools/lib/tests.utils";
 
 export const SWAP_EVENT = "event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick)";
 export const UNISWAP_V3_FACTORY_ADDRESS = "0x1f98431c8ad98523631ae4a59f267346ea31f984";
+
+//Hash of the UniswapV3Pool contract init code, used for address
+const initCodeHash = "0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54";
 
 //cache to store the information of a pool (token0, token1, fee, realPoolAddressOrNot) and reduce the number of network calls
 const cache = new Map<string, [string, string, string, string]>([]);
@@ -62,15 +66,12 @@ export const provideHandleTx = (factory: string, theProvider: ethers.providers.P
     }
     //if the pool is not in the cache, confirm it's a uniswap pool
     if(cache.get(possiblePoolAddress)![3] == "0x1111111111111111111111111111111111111111") {
-      const factoryContract = new ethers.Contract(factory, [
-        'function getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)'
-      ], provider);
-      const pool = await factoryContract.getPool(token0, token1, fee, {
-        blockTag: txEvent.blockNumber,
-      });
+
+      //pre-compute the theoretical pool address using token0, token1, fee as salt
+      const salt = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(["address", "address", "uint24"], [token0, token1, fee]));
+      const pool = ethers.utils.getCreate2Address(UNISWAP_V3_FACTORY_ADDRESS, salt, initCodeHash).toLowerCase();
       
-      
-      if(possiblePoolAddress == pool.toLowerCase()){
+      if(possiblePoolAddress == pool){
         cache.set(possiblePoolAddress, [token0, token1, fee, possiblePoolAddress]);
       }
       else {
@@ -78,7 +79,6 @@ export const provideHandleTx = (factory: string, theProvider: ethers.providers.P
       }
     }
     
-
     // if a Uniswap V3 swap is detected, report it
     if (cache.get(possiblePoolAddress)![3] == possiblePoolAddress) {
       findings.push(
